@@ -1,4 +1,8 @@
 /*
+Modified by Jie Ren (jieren9806@gmail.com) to support some out-of-date compilers, e.g., GCC 6.
+ */
+
+/*
   __ _ _ __ __ _ _ __   __ _ _ __ ___  ___
  / _` | '__/ _` | '_ \ / _` | '__/ __|/ _ \ Argument Parser for Modern C++
 | (_| | | | (_| | |_) | (_| | |  \__ \  __/ http://github.com/p-ranav/argparse
@@ -32,7 +36,11 @@ SOFTWARE.
 #include <algorithm>
 #include <any>
 #include <cerrno>
+#if __has_include(<charconv>)
 #include <charconv>
+#else
+#pragma message( "Although the compilation may be passed, there are still features that is not supported" )
+#endif
 #include <cstdlib>
 #include <functional>
 #include <iostream>
@@ -54,17 +62,15 @@ namespace argparse {
 
 namespace details { // namespace for helper methods
 
-template <typename T, typename = void>
-struct is_container : std::false_type {};
+template <typename T, typename = void> struct is_container : std::false_type {};
 
 template <> struct is_container<std::string> : std::false_type {};
 
 template <typename T>
-struct is_container<T, std::void_t<typename T::value_type,
-                                   decltype(std::declval<T>().begin()),
-                                   decltype(std::declval<T>().end()),
-                                   decltype(std::declval<T>().size())>>
-  : std::true_type {};
+struct is_container<
+    T, std::void_t<typename T::value_type, decltype(std::declval<T>().begin()),
+                   decltype(std::declval<T>().end()),
+                   decltype(std::declval<T>().size())>> : std::true_type {};
 
 template <typename T>
 static constexpr bool is_container_v = is_container<T>::value;
@@ -73,9 +79,9 @@ template <typename T, typename = void>
 struct is_streamable : std::false_type {};
 
 template <typename T>
-struct is_streamable<
-    T, std::void_t<decltype(std::declval<std::ostream&>() << std::declval<T>())>>
-  : std::true_type {};
+struct is_streamable<T, std::void_t<decltype(std::declval<std::ostream &>()
+                                             << std::declval<T>())>>
+    : std::true_type {};
 
 template <typename T>
 static constexpr bool is_streamable_v = is_streamable<T>::value;
@@ -99,7 +105,8 @@ template <typename T> std::string repr(T const &val) {
       out << repr(*val.begin());
       std::for_each(
           std::next(val.begin()),
-          std::next(val.begin(), std::min<std::size_t>(size, repr_max_container_size) - 1),
+          std::next(val.begin(),
+                    std::min<std::size_t>(size, repr_max_container_size) - 1),
           [&out](const auto &v) { out << " " << repr(v); });
       if (size <= repr_max_container_size)
         out << " ";
@@ -193,6 +200,7 @@ constexpr auto consume_hex_prefix(std::string_view s)
 
 template <class T, auto Param>
 inline auto do_from_chars(std::string_view s) -> T {
+#if __has_include(<charconv>)
   T x;
   auto [first, last] = pointer_range(s);
   auto [ptr, ec] = std::from_chars(first, last, x, Param);
@@ -208,6 +216,9 @@ inline auto do_from_chars(std::string_view s) -> T {
   } else {
     return x; // unreachable
   }
+#else
+  throw std::runtime_error("Not support for your compiler, recommend GCC >= 8");
+#endif
 }
 
 template <class T, auto Param = 0> struct parse_number {
